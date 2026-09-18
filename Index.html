@@ -1,0 +1,35 @@
+const DB_FILE_NAME = "gst_accounting_cloud_data.json";
+
+function doGet(e) {
+  try {
+    const files = DriveApp.getFilesByName(DB_FILE_NAME);
+    let payload = "{}";
+    if (files.hasNext()) {
+      payload = files.next().getBlob().getDataAsString();
+    }
+    return ContentService.createTextOutput(payload)
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    const body = e.postData.contents;
+    const files = DriveApp.getFilesByName(DB_FILE_NAME);
+    let targetFile;
+    if (files.hasNext()) {
+      targetFile = files.next();
+      targetFile.setContent(body);
+    } else {
+      targetFile = DriveApp.createFile(DB_FILE_NAME, body, MimeType.PLAIN_TEXT);
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", updated: new Date() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
