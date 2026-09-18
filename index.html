@@ -1,35 +1,754 @@
-const DB_FILE_NAME = "gst_accounting_cloud_data.json";
-
-function doGet(e) {
-  try {
-    const files = DriveApp.getFilesByName(DB_FILE_NAME);
-    let payload = "{}";
-    if (files.hasNext()) {
-      payload = files.next().getBlob().getDataAsString();
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaxFlow ERP - Indian GST Billing & Double-Entry Accounting</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+              900: '#082f49',
+            },
+            gstGreen: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
     }
-    return ContentService.createTextOutput(payload)
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+  </script>
 
-function doPost(e) {
-  try {
-    const body = e.postData.contents;
-    const files = DriveApp.getFilesByName(DB_FILE_NAME);
-    let targetFile;
-    if (files.hasNext()) {
-      targetFile = files.next();
-      targetFile.setContent(body);
-    } else {
-      targetFile = DriveApp.createFile(DB_FILE_NAME, body, MimeType.PLAIN_TEXT);
+  <style>
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        font-size: 11px !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+      .print-container {
+        box-shadow: none !important;
+        border: 1px solid #334155 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1.25rem !important;
+      }
+      @page {
+        size: A4 portrait;
+        margin: 8mm;
+      }
     }
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", updated: new Date() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+    .print-only {
+      display: none;
+    }
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen antialiased selection:bg-brand-500 selection:text-white flex flex-col">
+
+  <header class="no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-700 to-gstGreen-600 flex items-center justify-center text-white font-bold shadow-md shadow-brand-500/20">
+            <i data-lucide="calculator" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-extrabold text-lg tracking-tight text-slate-900">TaxFlow<span class="text-brand-600">ERP</span></span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">GST Bookkeeping</span>
+            </div>
+            <p class="text-[11px] text-slate-500 -mt-0.5">FY 2026-2027 &bull; Integrated Party Ledger &amp; Tax Engine</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="hidden md:flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-600">
+            <i data-lucide="building-2" class="w-3.5 h-3.5 mr-1 text-brand-600"></i>
+            <span id="navCompName" class="font-semibold text-slate-800">Dharod Enterprises Pvt Ltd</span>
+            <span class="mx-1 text-slate-300">|</span>
+            <span class="font-mono text-[10px]">27ABCDE1234F1Z5</span>
+          </div>
+
+          <button onclick="openCloudModal()" id="cloudStatusBtn" class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-sm transition">
+            <i data-lucide="cloud" class="w-3.5 h-3.5 text-brand-600"></i>
+            <span id="cloudStatusText" class="hidden sm:inline">Google Cloud</span>
+          </button>
+
+          <button onclick="resetToSampleData()" title="Reload Sample Data" class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-sm transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span class="hidden sm:inline">Reset Demo</span>
+          </button>
+
+          <button onclick="openSettingsModal()" class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-sm transition">
+            <i data-lucide="settings" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span class="hidden sm:inline">Company</span>
+          </button>
+        </div>
+      </div>
+
+      <nav class="flex space-x-1 sm:space-x-4 border-t border-slate-100 py-1 overflow-x-auto custom-scrollbar">
+        <button onclick="switchTab('billing')" id="tabBtn-billing" class="tab-btn px-3.5 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap bg-brand-50 text-brand-700 border border-brand-200">
+          <i data-lucide="receipt" class="w-4 h-4"></i>
+          <span>GST Billing / Invoice</span>
+        </button>
+
+        <button onclick="switchTab('masters')" id="tabBtn-masters" class="tab-btn px-3.5 py-2 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-1.5 whitespace-nowrap">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          <span>Party Masters</span>
+          <span id="mastersCountBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 font-bold">4</span>
+        </button>
+
+        <button onclick="switchTab('vouchers')" id="tabBtn-vouchers" class="tab-btn px-3.5 py-2 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-1.5 whitespace-nowrap">
+          <i data-lucide="book-open-check" class="w-4 h-4"></i>
+          <span>Accounting Vouchers</span>
+          <span id="vouchersCountBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-brand-100 text-brand-700 font-bold">6</span>
+        </button>
+
+        <button onclick="switchTab('ledger')" id="tabBtn-ledger" class="tab-btn px-3.5 py-2 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-1.5 whitespace-nowrap">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          <span>Party Ledger Statements</span>
+        </button>
+
+        <button onclick="switchTab('gstr')" id="tabBtn-gstr" class="tab-btn px-3.5 py-2 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-1.5 whitespace-nowrap">
+          <i data-lucide="pie-chart" class="w-4 h-4"></i>
+          <span>GSTR-1 Tax Summary</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+    <!-- MODULE 1: GST BILLING -->
+    <div id="view-billing" class="tab-view space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-7 print-container space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-5 gap-3">
+          <div>
+            <div class="flex items-center gap-3">
+              <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">TAX INVOICE</h1>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300 print-only">
+                ORIGINAL FOR RECIPIENT
+              </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">(Issued under Section 31 of CGST Act 2017 &amp; Rule 46 of GST Rules)</p>
+          </div>
+
+          <div class="flex items-center gap-3 no-print">
+            <span id="supplyBadge" class="font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px]">
+              INTRA-STATE (CGST + SGST)
+            </span>
+            <button onclick="window.print()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+              <span>Print Invoice</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50/90 border border-slate-200 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Invoice Number *</label>
+            <input type="text" id="invoiceNumber" value="INV-2026-0042" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono bg-white">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Invoice Date *</label>
+            <input type="date" id="invoiceDate" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Due Date</label>
+            <input type="date" id="dueDate" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Place of Supply *</label>
+            <select id="placeOfSupply" onchange="renderItemsTable()" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-medium"></select>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="p-4 rounded-xl border border-slate-200 bg-white space-y-1.5 text-xs text-slate-700">
+            <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Supplier (Billed From)</span>
+            <div class="text-base font-extrabold text-slate-900" id="dispCompName">Dharod Enterprises Pvt Ltd</div>
+            <div>GSTIN: <span id="dispCompGstin" class="font-bold text-slate-900 font-mono">27ABCDE1234F1Z5</span></div>
+            <p id="dispCompAddress" class="text-slate-600">Shop 14, Commercial Tech Park, Vasai-Virar, Mumbai 401202</p>
+            <div>State: <strong id="dispCompState">Maharashtra (27)</strong></div>
+          </div>
+
+          <div class="p-4 rounded-xl border border-slate-200 bg-white space-y-3 text-xs">
+            <div class="flex items-center justify-between pb-2 border-b">
+              <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Customer (Billed To)</span>
+              <button onclick="openPartyModal('Customer')" class="text-[11px] text-brand-600 font-semibold no-print">+ Add Customer</button>
+            </div>
+            <div class="no-print">
+              <select id="invoicePartySelect" onchange="handleSelectPartyInInvoice(this.value)" class="w-full px-2 py-1 rounded border border-slate-300 bg-slate-50 font-medium"></select>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="buyerName" value="Zenith Global Solutions LLP" placeholder="Party Name" class="px-2.5 py-1.5 rounded-lg border border-slate-300 font-medium">
+              <input type="text" id="buyerGstin" value="27AAACZ1234A1ZA" placeholder="GSTIN" maxlength="15" oninput="handleBuyerGstinInput(this)" class="px-2.5 py-1.5 rounded-lg border border-slate-300 uppercase font-mono">
+            </div>
+            <textarea id="buyerAddress" rows="2" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300">Unit 402, Pinnacle Horizon, Andheri East, Mumbai 400069</textarea>
+            <div class="grid grid-cols-2 gap-2">
+              <select id="buyerState" onchange="handleBuyerStateChange()" class="px-2.5 py-1.5 rounded-lg border border-slate-300"></select>
+              <input type="text" id="buyerStateCode" readonly value="27" class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-100 font-mono">
+            </div>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 text-slate-600 font-semibold border-b text-[11px]">
+              <tr>
+                <th class="p-2.5 w-8">#</th>
+                <th class="p-2.5 min-w-[200px]">Item Description</th>
+                <th class="p-2.5 w-24">HSN</th>
+                <th class="p-2.5 w-16 text-right">Qty</th>
+                <th class="p-2.5 w-24 text-right">Rate (₹)</th>
+                <th class="p-2.5 w-16 text-right">Disc%</th>
+                <th class="p-2.5 w-20 text-center">GST%</th>
+                <th class="p-2.5 w-28 text-right">Total (₹)</th>
+                <th class="p-2.5 w-12 text-center no-print">Action</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTableBody" class="divide-y divide-slate-200 bg-white"></tbody>
+          </table>
+        </div>
+
+        <div class="flex justify-between items-center no-print">
+          <button onclick="addNewItemRow()" class="px-3 py-1.5 rounded-lg border border-brand-300 text-brand-700 bg-brand-50 hover:bg-brand-100 font-semibold text-xs flex items-center gap-1">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Item Line
+          </button>
+        </div>
+
+        <!-- Totals & Ledger Post -->
+        <div class="grid lg:grid-cols-12 gap-6 items-start pt-2">
+          <div class="lg:col-span-7 space-y-4">
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Amount In Words:</span>
+              <p id="amountInWords" class="text-xs font-semibold text-slate-900 leading-relaxed capitalize">Indian Rupees Zero Only</p>
+            </div>
+            <div class="no-print p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-bold text-slate-900">Post Direct to Customer Ledger</h4>
+                <p class="text-[11px] text-slate-600">Creates double-entry sales voucher and logs customer debit.</p>
+              </div>
+              <button onclick="saveInvoiceAndPostToLedger()" class="px-4 py-2 rounded-xl bg-gstGreen-600 hover:bg-gstGreen-700 text-white font-bold text-xs flex items-center gap-1">
+                <i data-lucide="check-check" class="w-4 h-4"></i> Post Voucher
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-2 text-xs font-mono">
+            <div class="flex justify-between font-sans"><span>Taxable Subtotal:</span><span id="summarySubtotal" class="font-bold">₹ 0.00</span></div>
+            <div id="intraTaxSection" class="space-y-1 pt-1 border-t">
+              <div class="flex justify-between"><span>CGST:</span><span id="summaryCgst">₹ 0.00</span></div>
+              <div class="flex justify-between"><span>SGST:</span><span id="summarySgst">₹ 0.00</span></div>
+            </div>
+            <div id="interTaxSection" class="hidden pt-1 border-t">
+              <div class="flex justify-between"><span>IGST:</span><span id="summaryIgst">₹ 0.00</span></div>
+            </div>
+            <div class="flex justify-between font-sans font-extrabold text-base pt-2 border-t-2 text-brand-700">
+              <span>Grand Total:</span>
+              <span id="summaryGrandTotal">₹ 0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 2: PARTY MASTERS -->
+    <div id="view-masters" class="tab-view hidden space-y-4">
+      <div class="flex justify-between items-center bg-white p-4 rounded-xl border">
+        <h2 class="font-bold text-slate-900">Registered Party Masters</h2>
+        <div class="flex gap-2">
+          <button onclick="openPartyModal('Customer')" class="px-3 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg">+ Add Customer</button>
+          <button onclick="openPartyModal('Vendor')" class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg">+ Add Vendor</button>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-50 border-b text-[11px] text-slate-600 font-semibold">
+            <tr>
+              <th class="p-3">Party Name</th>
+              <th class="p-3">Type</th>
+              <th class="p-3">GSTIN</th>
+              <th class="p-3">State</th>
+              <th class="p-3 text-right">Ledger Balance</th>
+              <th class="p-3 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mastersTableBody" class="divide-y bg-white"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MODULE 3: VOUCHERS -->
+    <div id="view-vouchers" class="tab-view hidden space-y-4">
+      <div class="flex justify-between items-center bg-white p-4 rounded-xl border">
+        <h2 class="font-bold text-slate-900">Accounting Vouchers</h2>
+        <div class="flex gap-2">
+          <button onclick="openVoucherModal('Payment')" class="px-2.5 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded-lg">+ Payment</button>
+          <button onclick="openVoucherModal('Receipt')" class="px-2.5 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg">+ Receipt</button>
+          <button onclick="openVoucherModal('Purchase')" class="px-2.5 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg">+ Purchase</button>
+          <button onclick="openVoucherModal('Sales')" class="px-2.5 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg">+ Sales</button>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-50 border-b text-[11px] text-slate-600 font-semibold">
+            <tr>
+              <th class="p-3">Date</th>
+              <th class="p-3">Vch No</th>
+              <th class="p-3">Type</th>
+              <th class="p-3">Party</th>
+              <th class="p-3">Narration</th>
+              <th class="p-3 text-right">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody id="vouchersTableBody" class="divide-y bg-white font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MODULE 4: PARTY LEDGER -->
+    <div id="view-ledger" class="tab-view hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl border flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div class="w-full sm:w-80">
+          <label class="block font-semibold text-xs text-slate-600 mb-1">Select Account / Party:</label>
+          <select id="ledgerPartySelect" onchange="renderPartyLedger()" class="w-full p-2 border rounded-lg text-xs bg-white font-medium"></select>
+        </div>
+        <button onclick="window.print()" class="px-3.5 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg no-print flex items-center gap-1">
+          <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Statement
+        </button>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl border print-container space-y-4">
+        <div class="border-b pb-4 flex justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-slate-900" id="stPartyName">Party Name</h3>
+            <p class="text-xs text-slate-500" id="stPartyAddress">Address</p>
+            <p class="text-xs text-slate-600 font-mono mt-1">GSTIN: <span id="stPartyGstin"></span></p>
+          </div>
+          <div class="text-right">
+            <span class="text-xs text-slate-400 block uppercase">Closing Balance</span>
+            <span id="stClosingBalanceDisp" class="text-lg font-bold font-mono text-slate-900">₹ 0.00</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 border-b text-[11px] text-slate-600 font-semibold">
+              <tr>
+                <th class="p-2.5">Date</th>
+                <th class="p-2.5">Voucher</th>
+                <th class="p-2.5">Type</th>
+                <th class="p-2.5">Particulars</th>
+                <th class="p-2.5 text-right">Debit (₹)</th>
+                <th class="p-2.5 text-right">Credit (₹)</th>
+                <th class="p-2.5 text-right">Balance (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerTableBody" class="divide-y bg-white font-mono"></tbody>
+            <tfoot id="ledgerTableFoot" class="bg-slate-50 font-bold border-t"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 5: GSTR-1 -->
+    <div id="view-gstr" class="tab-view hidden space-y-4">
+      <div class="bg-white p-5 rounded-xl border space-y-4">
+        <h2 class="font-bold text-slate-900">GSTR-1 Outward Supplies Summary</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+          <div class="p-3 bg-slate-50 rounded-lg border"><span class="text-slate-400 block font-sans">Taxable Value</span><strong id="gstrTotalTaxable" class="text-base text-slate-900">₹ 0.00</strong></div>
+          <div class="p-3 bg-slate-50 rounded-lg border"><span class="text-slate-400 block font-sans">IGST</span><strong id="gstrTotalIgst" class="text-base text-brand-700">₹ 0.00</strong></div>
+          <div class="p-3 bg-slate-50 rounded-lg border"><span class="text-slate-400 block font-sans">CGST</span><strong id="gstrTotalCgst" class="text-base text-emerald-700">₹ 0.00</strong></div>
+          <div class="p-3 bg-slate-50 rounded-lg border"><span class="text-slate-400 block font-sans">SGST</span><strong id="gstrTotalSgst" class="text-base text-emerald-700">₹ 0.00</strong></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- CLOUD SETUP MODAL -->
+  <div id="cloudModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border space-y-4 text-xs">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2"><i data-lucide="cloud" class="w-4 h-4 text-brand-600"></i> Google Drive Cloud Sync</h3>
+        <button onclick="closeCloudModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">Google Apps Script Web App URL:</label>
+        <input type="url" id="cloudScriptUrl" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 border rounded-lg font-mono">
+      </div>
+
+      <div class="flex justify-between items-center pt-2">
+        <button onclick="saveCloudUrl()" class="px-4 py-2 bg-brand-600 text-white font-semibold rounded-lg">Save &amp; Connect</button>
+        <div class="flex gap-2">
+          <button onclick="syncToDrive()" class="px-3 py-2 border rounded-lg hover:bg-slate-50 font-medium">Sync to Drive</button>
+          <button onclick="fetchFromDrive()" class="px-3 py-2 border rounded-lg hover:bg-slate-50 font-medium">Fetch from Drive</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const INDIAN_STATES = [
+      { code: "01", name: "Jammu and Kashmir" }, { code: "02", name: "Himachal Pradesh" },
+      { code: "03", name: "Punjab" }, { code: "04", name: "Chandigarh" }, { code: "05", name: "Uttarakhand" },
+      { code: "06", name: "Haryana" }, { code: "07", name: "Delhi" }, { code: "08", name: "Rajasthan" },
+      { code: "09", name: "Uttar Pradesh" }, { code: "10", name: "Bihar" }, { code: "24", name: "Gujarat" },
+      { code: "27", name: "Maharashtra" }, { code: "29", name: "Karnataka" }, { code: "33", name: "Tamil Nadu" },
+      { code: "36", name: "Telangana" }
+    ];
+
+    const DEFAULT_COMPANY = {
+      name: "Dharod Enterprises Pvt Ltd",
+      gstin: "27ABCDE1234F1Z5",
+      address: "Shop 14, Commercial Tech Park, Vasai-Virar, Mumbai 401202",
+      stateCode: "27",
+      stateName: "Maharashtra"
+    };
+
+    const DEFAULT_PARTIES = [
+      { id: 1, name: "Zenith Global Solutions LLP", type: "Customer", gstin: "27AAACZ1234A1ZA", pan: "AAACZ1234A", stateCode: "27", stateName: "Maharashtra", address: "Unit 402, Andheri East, Mumbai", openingBal: 0, openingType: "Dr" },
+      { id: 2, name: "Apex Cloud Infrastructures", type: "Customer", gstin: "24AABCA5555M1Z9", pan: "AABCA5555M", stateCode: "24", stateName: "Gujarat", address: "Gandhinagar, Gujarat", openingBal: 15000, openingType: "Dr" },
+      { id: 3, name: "TechnoByte Hardware Suppliers", type: "Vendor", gstin: "27BBBCT9988P1Z3", pan: "BBBCT9988P", stateCode: "27", stateName: "Maharashtra", address: "Lamington Road, Mumbai", openingBal: 25000, openingType: "Cr" }
+    ];
+
+    const DEFAULT_VOUCHERS = [
+      { id: 1, date: "2026-09-01", vchNo: "INV-2026-0001", type: "Sales", partyId: 1, partyName: "Zenith Global Solutions LLP", narration: "SAP ERP consultation", total: 100300, taxable: 85000, cgst: 7650, sgst: 7650, igst: 0 },
+      { id: 2, date: "2026-09-10", vchNo: "REC-2026-0012", type: "Receipt", partyId: 1, partyName: "Zenith Global Solutions LLP", narration: "Payment via NEFT", total: 50000, taxable: 0, cgst: 0, sgst: 0, igst: 0 }
+    ];
+
+    let companyProfile = JSON.parse(localStorage.getItem("tf_company")) || DEFAULT_COMPANY;
+    let partyMasters = JSON.parse(localStorage.getItem("tf_parties")) || DEFAULT_PARTIES;
+    let accountingVouchers = JSON.parse(localStorage.getItem("tf_vouchers")) || DEFAULT_VOUCHERS;
+    let cloudScriptUrl = localStorage.getItem("tf_script_url") || "";
+
+    let invoiceItems = [
+      { id: 1, desc: "SAP ERP Financial Process Mapping", hsn: "998311", qty: 1, rate: 85000, discount: 0, gstRate: 18 }
+    ];
+
+    function saveState() {
+      localStorage.setItem("tf_company", JSON.stringify(companyProfile));
+      localStorage.setItem("tf_parties", JSON.stringify(partyMasters));
+      localStorage.setItem("tf_vouchers", JSON.stringify(accountingVouchers));
+      if (cloudScriptUrl) syncToDrive();
+    }
+
+    function formatINR(val) {
+      return "₹ " + Number(val || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function switchTab(id) {
+      document.querySelectorAll('.tab-view').forEach(e => e.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('bg-brand-50', 'text-brand-700', 'font-bold'));
+      
+      const v = document.getElementById(`view-${id}`);
+      const b = document.getElementById(`tabBtn-${id}`);
+      if (v && b) {
+        v.classList.remove('hidden');
+        b.classList.add('bg-brand-50', 'text-brand-700', 'font-bold');
+      }
+
+      if (id === 'masters') renderMastersTable();
+      if (id === 'vouchers') renderVouchersTable();
+      if (id === 'ledger') renderPartyLedger();
+      if (id === 'gstr') renderGstrSummary();
+      if (id === 'billing') renderItemsTable();
+      lucide.createIcons();
+    }
+
+    function renderMastersTable() {
+      const tbody = document.getElementById("mastersTableBody");
+      tbody.innerHTML = "";
+      partyMasters.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="p-3 font-bold">${p.name}</td>
+          <td class="p-3">${p.type}</td>
+          <td class="p-3 font-mono">${p.gstin || 'Unregistered'}</td>
+          <td class="p-3">${p.stateName}</td>
+          <td class="p-3 text-right font-mono font-bold">${formatINR(p.openingBal)}</td>
+          <td class="p-3 text-center">
+            <button onclick="viewLedger(${p.id})" class="text-brand-600 underline">Ledger</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById("mastersCountBadge").textContent = partyMasters.length;
+    }
+
+    function renderVouchersTable() {
+      const tbody = document.getElementById("vouchersTableBody");
+      tbody.innerHTML = "";
+      accountingVouchers.forEach(v => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="p-3">${v.date}</td>
+          <td class="p-3 font-bold">${v.vchNo}</td>
+          <td class="p-3">${v.type}</td>
+          <td class="p-3 font-sans">${v.partyName}</td>
+          <td class="p-3 font-sans text-slate-500">${v.narration}</td>
+          <td class="p-3 text-right font-bold">${formatINR(v.total)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById("vouchersCountBadge").textContent = accountingVouchers.length;
+    }
+
+    function renderPartyLedger() {
+      const select = document.getElementById("ledgerPartySelect");
+      const partyId = parseInt(select.value);
+      const party = partyMasters.find(p => p.id === partyId);
+      if (!party) return;
+
+      document.getElementById("stPartyName").textContent = party.name;
+      document.getElementById("stPartyAddress").textContent = party.address;
+      document.getElementById("stPartyGstin").textContent = party.gstin || "Unregistered";
+
+      const tbody = document.getElementById("ledgerTableBody");
+      tbody.innerHTML = "";
+      let bal = 0;
+
+      accountingVouchers.filter(v => v.partyId === party.id).forEach(v => {
+        let dr = v.type === 'Sales' ? v.total : 0;
+        let cr = v.type === 'Receipt' ? v.total : 0;
+        bal += (dr - cr);
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="p-2.5">${v.date}</td>
+          <td class="p-2.5 font-bold">${v.vchNo}</td>
+          <td class="p-2.5">${v.type}</td>
+          <td class="p-2.5 font-sans">${v.narration}</td>
+          <td class="p-2.5 text-right">${dr ? formatINR(dr) : '-'}</td>
+          <td class="p-2.5 text-right text-emerald-600">${cr ? formatINR(cr) : '-'}</td>
+          <td class="p-2.5 text-right font-bold">${formatINR(Math.abs(bal))} ${bal >= 0 ? 'Dr' : 'Cr'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("stClosingBalanceDisp").textContent = formatINR(Math.abs(bal)) + (bal >= 0 ? ' Dr' : ' Cr');
+    }
+
+    function viewLedger(id) {
+      switchTab('ledger');
+      document.getElementById("ledgerPartySelect").value = id;
+      renderPartyLedger();
+    }
+
+    function renderItemsTable() {
+      const tbody = document.getElementById("itemsTableBody");
+      tbody.innerHTML = "";
+      const isIntra = companyProfile.stateCode === document.getElementById("placeOfSupply").value;
+
+      let subtotal = 0, cgst = 0, sgst = 0, igst = 0;
+
+      invoiceItems.forEach((itm, idx) => {
+        const taxable = itm.qty * itm.rate;
+        const tax = (taxable * itm.gstRate) / 100;
+        subtotal += taxable;
+
+        if (isIntra) {
+          cgst += tax / 2;
+          sgst += tax / 2;
+        } else {
+          igst += tax;
+        }
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="p-2.5 text-center">${idx + 1}</td>
+          <td class="p-2.5"><input type="text" value="${itm.desc}" onchange="itm.desc=this.value" class="w-full border rounded px-1"></td>
+          <td class="p-2.5 font-mono">${itm.hsn}</td>
+          <td class="p-2.5 text-right font-mono">${itm.qty}</td>
+          <td class="p-2.5 text-right font-mono">${itm.rate}</td>
+          <td class="p-2.5 text-right font-mono">${itm.discount}%</td>
+          <td class="p-2.5 text-center font-mono">${itm.gstRate}%</td>
+          <td class="p-2.5 text-right font-mono font-bold">${(taxable + tax).toFixed(2)}</td>
+          <td class="p-2.5 text-center no-print"><button onclick="invoiceItems.splice(${idx},1);renderItemsTable()">✕</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("summarySubtotal").textContent = formatINR(subtotal);
+      if (isIntra) {
+        document.getElementById("intraTaxSection").classList.remove("hidden");
+        document.getElementById("interTaxSection").classList.add("hidden");
+        document.getElementById("summaryCgst").textContent = formatINR(cgst);
+        document.getElementById("summarySgst").textContent = formatINR(sgst);
+      } else {
+        document.getElementById("intraTaxSection").classList.add("hidden");
+        document.getElementById("interTaxSection").classList.remove("hidden");
+        document.getElementById("summaryIgst").textContent = formatINR(igst);
+      }
+
+      const grand = Math.round(subtotal + cgst + sgst + igst);
+      document.getElementById("summaryGrandTotal").textContent = formatINR(grand);
+    }
+
+    function saveInvoiceAndPostToLedger() {
+      const invNo = document.getElementById("invoiceNumber").value;
+      const invDate = document.getElementById("invoiceDate").value;
+      const partyName = document.getElementById("buyerName").value;
+      let party = partyMasters.find(p => p.name.toLowerCase() === partyName.toLowerCase());
+
+      if (!party) {
+        party = { id: Date.now(), name: partyName, type: "Customer", gstin: document.getElementById("buyerGstin").value, address: document.getElementById("buyerAddress").value, openingBal: 0 };
+        partyMasters.push(party);
+      }
+
+      const totalVal = parseFloat(document.getElementById("summaryGrandTotal").textContent.replace(/[^0-9.]/g, '')) || 0;
+
+      accountingVouchers.push({
+        id: Date.now(),
+        date: invDate,
+        vchNo: invNo,
+        type: "Sales",
+        partyId: party.id,
+        partyName: party.name,
+        narration: `Tax Invoice #${invNo}`,
+        total: totalVal
+      });
+
+      saveState();
+      alert(`Invoice ${invNo} posted to customer ledger!`);
+      viewLedger(party.id);
+    }
+
+    function openCloudModal() {
+      document.getElementById("cloudScriptUrl").value = cloudScriptUrl;
+      document.getElementById("cloudModal").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function closeCloudModal() {
+      document.getElementById("cloudModal").classList.add("hidden");
+    }
+
+    function saveCloudUrl() {
+      cloudScriptUrl = document.getElementById("cloudScriptUrl").value.trim();
+      localStorage.setItem("tf_script_url", cloudScriptUrl);
+      closeCloudModal();
+      syncToDrive();
+    }
+
+    async function syncToDrive() {
+      if (!cloudScriptUrl) return;
+      document.getElementById("cloudStatusText").textContent = "Syncing...";
+      try {
+        const payload = { companyProfile, partyMasters, accountingVouchers };
+        await fetch(cloudScriptUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        document.getElementById("cloudStatusText").textContent = "Cloud Synced";
+      } catch (err) {
+        document.getElementById("cloudStatusText").textContent = "Sync Failed";
+      }
+    }
+
+    async function fetchFromDrive() {
+      if (!cloudScriptUrl) return;
+      try {
+        const res = await fetch(cloudScriptUrl);
+        const data = await res.json();
+        if (data && data.partyMasters) {
+          companyProfile = data.companyProfile || companyProfile;
+          partyMasters = data.partyMasters || partyMasters;
+          accountingVouchers = data.accountingVouchers || accountingVouchers;
+          saveState();
+          location.reload();
+        }
+      } catch (err) {
+        alert("Failed to load from Google Drive.");
+      }
+    }
+
+    function init() {
+      const pos = document.getElementById("placeOfSupply");
+      const bState = document.getElementById("buyerState");
+      const pSelect = document.getElementById("invoicePartySelect");
+      const lSelect = document.getElementById("ledgerPartySelect");
+
+      INDIAN_STATES.forEach(s => {
+        pos.add(new Option(`${s.code} - ${s.name}`, s.code));
+        bState.add(new Option(`${s.code} - ${s.name}`, s.code));
+      });
+      pos.value = "27";
+      bState.value = "27";
+
+      pSelect.innerHTML = `<option value="">-- Choose Customer --</option>`;
+      lSelect.innerHTML = "";
+      partyMasters.forEach(p => {
+        pSelect.add(new Option(p.name, p.id));
+        lSelect.add(new Option(p.name, p.id));
+      });
+
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("invoiceDate").value = today;
+      document.getElementById("dueDate").value = today;
+
+      renderItemsTable();
+      lucide.createIcons();
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
